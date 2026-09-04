@@ -1,0 +1,6 @@
+flask>=3.0
+requests>=2.31
+anthropic>=0.40
+pypdf>=4.0
+fastembed>=0.3
+numpy>=1.26

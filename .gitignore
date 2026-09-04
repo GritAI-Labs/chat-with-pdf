@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+*.log
+.fastembed_cache/
+.DS_Store
