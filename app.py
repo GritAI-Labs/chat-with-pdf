@@ -272,13 +272,13 @@ header .sub{margin:2px 0 0;font-size:12.5px;color:rgba(255,255,255,.85)}
  box-shadow:0 2px 6px rgba(19,35,32,.06)}
 .msg.bot{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
 .msg.user{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;border-bottom-right-radius:5px}
-.cite{position:relative;display:inline-block;background:var(--cite-bg);color:var(--cite);border-radius:6px;padding:0 6px;
- font-size:12px;font-weight:600;white-space:nowrap;cursor:help}
-.cite .pop{display:none;position:fixed;width:290px;max-width:88vw;
- background:#0f2a28;color:#eafaf7;border-radius:11px;padding:11px 13px;font-size:12px;font-weight:400;line-height:1.5;
- box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:60;white-space:normal;text-align:left}
-.cite:hover .pop{display:block}
-.cite .ps{margin:5px 0}.cite .ps:first-child{margin-top:0}.cite .ps b{color:#7fe6d6;font-weight:700}
+.cite{display:inline-block;background:var(--cite-bg);color:var(--cite);border-radius:6px;padding:0 6px;
+ font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;transition:.12s}
+.cite:hover{text-decoration:underline}
+.cite.act{background:var(--cite);color:#fff}
+.srcpanel{margin-top:10px;border-left:3px solid var(--cite);background:#f0faf8;border-radius:0 9px 9px 0;padding:9px 12px}
+.srcpanel .ps{font-size:12.5px;line-height:1.5;color:#3a4a47;margin:6px 0}
+.srcpanel .ps:first-child{margin-top:0}.srcpanel .ps b{color:var(--cite);font-weight:700}
 .starters{display:flex;flex-wrap:wrap;gap:8px;padding:2px 4px 4px 43px}
 .starter{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:7px 12px;font-size:12.5px;
  cursor:pointer;color:var(--teal);transition:.15s}
@@ -354,24 +354,27 @@ file.onchange=e=>{if(e.target.files[0])upload(e.target.files[0]);};
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')upload(f);});
 function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 const CITE=/\\(pp?\\.?\\s*\\d+(?:\\s*(?:,|;|&amp;|and)\\s*(?:pp?\\.?\\s*)?\\d+)*\\)/gi;
-function popFor(m,sources){if(!sources)return'';const seen={};let out='';
- (m.match(/\\d+/g)||[]).forEach(p=>{if(sources[p]&&!seen[p]){seen[p]=1;out+='<span class="ps"><b>p. '+p+'</b> '+esc(sources[p])+'…</span>';}});
- return out?'<span class="pop">'+out+'</span>':'';}
-function render(el,text,sources){el.innerHTML=esc(text).replace(CITE,m=>'<span class="cite">'+m+popFor(m,sources)+'</span>');}
-function placePop(c){const pop=c.querySelector('.pop');if(!pop)return;
- pop.style.left='0px';pop.style.top='0px';
- const cr=c.getBoundingClientRect(),pw=pop.offsetWidth||280,ph=pop.offsetHeight||90,m=10,vw=innerWidth;
- let left=cr.left+cr.width/2-pw/2;left=Math.max(m,Math.min(left,vw-pw-m));
- let top=cr.top-ph-9;if(top<m)top=cr.bottom+9;
- pop.style.left=left+'px';pop.style.top=top+'px';}
-log.addEventListener('mouseover',e=>{const c=e.target.closest('.cite');if(c)placePop(c);});
+function render(el,text,sources){el._src=sources||{};
+ el.innerHTML=esc(text).replace(CITE,m=>{const pages=(m.match(/\\d+/g)||[]).join(',');
+  return '<span class="cite" data-pages="'+pages+'">'+m+'</span>';})+'<div class="srcpanel" style="display:none"></div>';
+ const panel=el.querySelector('.srcpanel');
+ el.querySelectorAll('.cite').forEach(pill=>{pill.onclick=()=>{
+  const pgs=(pill.dataset.pages||'').split(',').filter(Boolean);
+  const html=pgs.filter(p=>el._src[p]).map(p=>'<div class="ps"><b>p. '+p+'</b> '+esc(el._src[p])+'…</div>').join('');
+  if(!html)return;
+  const same=panel.dataset.open===pill.dataset.pages&&panel.style.display==='block';
+  el.querySelectorAll('.cite').forEach(c=>c.classList.remove('act'));
+  if(same){panel.style.display='none';panel.dataset.open='';}
+  else{panel.innerHTML=html;panel.style.display='block';panel.dataset.open=pill.dataset.pages;pill.classList.add('act');
+   panel.scrollIntoView({block:'nearest',behavior:'smooth'});}
+ };});}
 function add(t,who){const row=document.createElement('div');row.className='row '+who;
  if(who==='bot'){const a=document.createElement('div');a.className='av';a.textContent='📄';row.appendChild(a);}
  const d=document.createElement('div');d.className='msg '+who;d.textContent=t;row.appendChild(d);
  log.appendChild(row);log.scrollTop=log.scrollHeight;return d;}
 function showChat(d){docId=d.doc_id;dt.textContent=d.title;dm.textContent=d.pages+' pages · '+d.chunks+' chunks indexed';
  uploadView.style.display='none';chatView.style.display='flex';log.innerHTML='';
- add('Loaded "'+d.title+'". Ask me anything about it — I\\'ll cite the pages I use.','bot');q.focus();}
+ add('Loaded "'+d.title+'". Ask me anything about it — I\\'ll cite the pages, and you can tap any (p. X) to see the exact source.','bot');q.focus();}
 function reset(){docId=null;chatView.style.display='none';uploadView.style.display='flex';file.value='';
  drop.innerHTML='<div class="ic">⬆️</div><div class="t">Drop a PDF here or click to upload</div><div class="h">Up to 20 MB · text-based PDFs</div>';drop.appendChild(file);}
 async function post(url,opts){const r=await fetch(url,opts);return r.json();}
