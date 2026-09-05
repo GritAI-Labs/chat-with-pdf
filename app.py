@@ -274,10 +274,9 @@ header .sub{margin:2px 0 0;font-size:12.5px;color:rgba(255,255,255,.85)}
 .msg.user{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;border-bottom-right-radius:5px}
 .cite{position:relative;display:inline-block;background:var(--cite-bg);color:var(--cite);border-radius:6px;padding:0 6px;
  font-size:12px;font-weight:600;white-space:nowrap;cursor:help}
-.cite .pop{display:none;position:absolute;bottom:135%;left:50%;transform:translateX(-50%);width:290px;max-width:74vw;
+.cite .pop{display:none;position:fixed;width:290px;max-width:88vw;
  background:#0f2a28;color:#eafaf7;border-radius:11px;padding:11px 13px;font-size:12px;font-weight:400;line-height:1.5;
- box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:30;white-space:normal;text-align:left}
-.cite .pop::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#0f2a28}
+ box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:60;white-space:normal;text-align:left}
 .cite:hover .pop{display:block}
 .cite .ps{margin:5px 0}.cite .ps:first-child{margin-top:0}.cite .ps b{color:#7fe6d6;font-weight:700}
 .starters{display:flex;flex-wrap:wrap;gap:8px;padding:2px 4px 4px 43px}
@@ -359,6 +358,13 @@ function popFor(m,sources){if(!sources)return'';const seen={};let out='';
  (m.match(/\\d+/g)||[]).forEach(p=>{if(sources[p]&&!seen[p]){seen[p]=1;out+='<span class="ps"><b>p. '+p+'</b> '+esc(sources[p])+'…</span>';}});
  return out?'<span class="pop">'+out+'</span>':'';}
 function render(el,text,sources){el.innerHTML=esc(text).replace(CITE,m=>'<span class="cite">'+m+popFor(m,sources)+'</span>');}
+function placePop(c){const pop=c.querySelector('.pop');if(!pop)return;
+ pop.style.left='0px';pop.style.top='0px';
+ const cr=c.getBoundingClientRect(),pw=pop.offsetWidth||280,ph=pop.offsetHeight||90,m=10,vw=innerWidth;
+ let left=cr.left+cr.width/2-pw/2;left=Math.max(m,Math.min(left,vw-pw-m));
+ let top=cr.top-ph-9;if(top<m)top=cr.bottom+9;
+ pop.style.left=left+'px';pop.style.top=top+'px';}
+log.addEventListener('mouseover',e=>{const c=e.target.closest('.cite');if(c)placePop(c);});
 function add(t,who){const row=document.createElement('div');row.className='row '+who;
  if(who==='bot'){const a=document.createElement('div');a.className='av';a.textContent='📄';row.appendChild(a);}
  const d=document.createElement('div');d.className='msg '+who;d.textContent=t;row.appendChild(d);
