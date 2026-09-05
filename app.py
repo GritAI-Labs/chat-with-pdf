@@ -114,8 +114,8 @@ def system_prompt():
 def build_context(chunks):
     return "\n\n".join(f"[p. {c['page']}] {c['text']}" for c in chunks)
 
-def answer_stream(doc, question):
-    ctx = build_context(retrieve(doc, question))
+def answer_from(chunks, question):
+    ctx = build_context(chunks)
     user = f"Document excerpts:\n\n{ctx}\n\n---\nQuestion: {question}"
     if ANTHROPIC_KEY:
         import anthropic
@@ -189,7 +189,12 @@ def api_ask():
             yield "data: " + json.dumps({"t": "Please ask a question."}) + "\n\n"
         else:
             try:
-                for chunk in answer_stream(doc, question):
+                chunks = retrieve(doc, question)
+                src = {}
+                for c in chunks:
+                    src.setdefault(str(c["page"]), c["text"][:420])
+                yield "data: " + json.dumps({"sources": src}) + "\n\n"
+                for chunk in answer_from(chunks, question):
                     yield "data: " + json.dumps({"t": chunk}) + "\n\n"
             except Exception as e:
                 print("ask error:", repr(e), file=_sys.stderr, flush=True)
@@ -267,8 +272,14 @@ header .sub{margin:2px 0 0;font-size:12.5px;color:rgba(255,255,255,.85)}
  box-shadow:0 2px 6px rgba(19,35,32,.06)}
 .msg.bot{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
 .msg.user{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#fff;border-bottom-right-radius:5px}
-.cite{display:inline-block;background:var(--cite-bg);color:var(--cite);border-radius:6px;padding:0 6px;
- font-size:12px;font-weight:600;white-space:nowrap}
+.cite{position:relative;display:inline-block;background:var(--cite-bg);color:var(--cite);border-radius:6px;padding:0 6px;
+ font-size:12px;font-weight:600;white-space:nowrap;cursor:help}
+.cite .pop{display:none;position:absolute;bottom:135%;left:50%;transform:translateX(-50%);width:290px;max-width:74vw;
+ background:#0f2a28;color:#eafaf7;border-radius:11px;padding:11px 13px;font-size:12px;font-weight:400;line-height:1.5;
+ box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:30;white-space:normal;text-align:left}
+.cite .pop::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#0f2a28}
+.cite:hover .pop{display:block}
+.cite .ps{margin:5px 0}.cite .ps:first-child{margin-top:0}.cite .ps b{color:#7fe6d6;font-weight:700}
 .starters{display:flex;flex-wrap:wrap;gap:8px;padding:2px 4px 4px 43px}
 .starter{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:7px 12px;font-size:12.5px;
  cursor:pointer;color:var(--teal);transition:.15s}
@@ -343,7 +354,11 @@ file.onchange=e=>{if(e.target.files[0])upload(e.target.files[0]);};
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')upload(f);});
 function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
-function render(el,text){el.innerHTML=esc(text).replace(/\\(pp?\\.?\\s*\\d+(?:\\s*(?:,|;|&amp;|and)\\s*(?:pp?\\.?\\s*)?\\d+)*\\)/gi,m=>'<span class="cite">'+m+'</span>');}
+const CITE=/\\(pp?\\.?\\s*\\d+(?:\\s*(?:,|;|&amp;|and)\\s*(?:pp?\\.?\\s*)?\\d+)*\\)/gi;
+function popFor(m,sources){if(!sources)return'';const seen={};let out='';
+ (m.match(/\\d+/g)||[]).forEach(p=>{if(sources[p]&&!seen[p]){seen[p]=1;out+='<span class="ps"><b>p. '+p+'</b> '+esc(sources[p])+'…</span>';}});
+ return out?'<span class="pop">'+out+'</span>':'';}
+function render(el,text,sources){el.innerHTML=esc(text).replace(CITE,m=>'<span class="cite">'+m+popFor(m,sources)+'</span>');}
 function add(t,who){const row=document.createElement('div');row.className='row '+who;
  if(who==='bot'){const a=document.createElement('div');a.className='av';a.textContent='📄';row.appendChild(a);}
  const d=document.createElement('div');d.className='msg '+who;d.textContent=t;row.appendChild(d);
@@ -371,14 +386,14 @@ async function loadSample(name){
 async function ask(preset){if(busy||!docId)return;const question=(preset||q.value).trim();if(!question)return;
  q.value='';busy=true;btn.disabled=true;add(question,'user');
  const b=add('','bot');b.innerHTML='<span class="typing"><span></span><span></span><span></span></span>';
- let full='';
+ let full='',srcMap={};
  try{const r=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({doc_id:docId,question})});
   const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
   while(true){const {value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
    let i;while((i=buf.indexOf('\\n\\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+2);
     if(!line.startsWith('data:'))continue;const p=line.slice(5).trim();if(p==='[DONE]')continue;
-    try{const t=JSON.parse(p).t;full+=t;b.textContent=full;log.scrollTop=log.scrollHeight;}catch(e){}}}
-  if(full)render(b,full);else b.textContent='No answer produced — try rephrasing.';
+    try{const o=JSON.parse(p);if(o.sources){srcMap=o.sources;}else if(o.t){full+=o.t;b.textContent=full;log.scrollTop=log.scrollHeight;}}catch(e){}}}
+  if(full)render(b,full,srcMap);else b.textContent='No answer produced — try rephrasing.';
  }catch(e){b.textContent='Sorry — something went wrong.';}
  busy=false;btn.disabled=false;q.focus();}
 </script></body></html>"""
